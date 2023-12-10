@@ -11,10 +11,10 @@ from telebot.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemo
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ForceReply
 import subprocess
 import pendulum
-from PIL import Image, ImageDraw, ImageFont
 
-from markups import createMarkupCalendar, createMarkupCategory, createMarkupUndoCancel, createMarkupPayor, createMarkupRatio, createMarkupConfirm, statusMap, categoryMap
-from utils import getToken
+from markups import createMarkupCalendar, createMarkupCategory, createMarkupUndoCancel, createMarkupPayor, createMarkupRatio, createMarkupConfirm, \
+    createMarkupDue, statusMap, categoryMap
+from utils import getToken, drawTable
 from db import DB
 
 
@@ -38,6 +38,7 @@ def createBot():
             '/help - show this message',
             '/join - register user in DB',
             '/add - add new expense record',
+            '/due - check/settle outstanding',
             '/query - <TBD>',
         ]
         bot.send_message(message.chat.id, '\n'.join(text))
@@ -300,38 +301,35 @@ def createBot():
                     message_id=callback.message.message_id,
                 )
         elif currentCommand == 'confirm':
-            if currentValues['confirm'] == 'yes':
-                # retrieve message from DB
-                db.runSelect('messages', column='message', condition=f'id = "{callback.message.chat.id}"')
-                output = db.outputLast
-                markupData = ';'.join([':'.join(i) for i in zip(['amount', 'category', 'date', 'payor', 'ratio', 'comment'], output.split(' @ '))])
-                currentValues = dict([i.split(':') for i in markupData.split(';') if i])
-                print(currentValues)
-                # insert new record
-                db.runInsert('records', {
-                    'id': callback.message.chat.id,
-                    'category': categoryMap[currentValues['category']],
-                    'amount': currentValues['amount'],
-                    'payor': currentValues['payor'],
-                    'ratio': currentValues['ratio'],
-                    'comment': currentValues['comment'],
-                    'settled': 'N',
-                    'timestamp': currentValues['date']
-                })
-                # insert/update last callback id
-                db.runInsertUpdate('messages', {
-                    'id': callback.message.chat.id,
-                    'status': statusMap['done'],   # or DELETE row
-                    'message': '',
-                    'lastCallbackId': callback.message.message_id,
-                }, 'status = {}, lastCallbackId = {}, message = ""'.format(statusMap['done'], callback.message.message_id))
-                bot.edit_message_text(
-                    text="--- {} ---\nNew record created successfully\nYou may /add again".format(pendulum.now(tz='Asia/Singapore').to_datetime_string()),
-                    chat_id=callback.message.chat.id,
-                    message_id=callback.message.message_id,
-                ) 
-            else:
-                bot.delete_message(chat_id=callback.message.chat.id, message_id=callback.message.message_id)
+            # retrieve message from DB
+            db.runSelect('messages', column='message', condition=f'id = "{callback.message.chat.id}"')
+            output = db.outputLast
+            markupData = ';'.join([':'.join(i) for i in zip(['amount', 'category', 'date', 'payor', 'ratio', 'comment'], output.split(' @ '))])
+            currentValues = dict([i.split(':') for i in markupData.split(';') if i])
+            print(currentValues)
+            # insert new record
+            db.runInsert('records', {
+                'id': callback.message.chat.id,
+                'category': categoryMap[currentValues['category']],
+                'amount': currentValues['amount'],
+                'payor': currentValues['payor'],
+                'ratio': currentValues['ratio'],
+                'comment': currentValues['comment'],
+                'settled': 'N',
+                'timestamp': currentValues['date']
+            })
+            # insert/update last callback id
+            db.runInsertUpdate('messages', {
+                'id': callback.message.chat.id,
+                'status': statusMap['done'],   # or DELETE row
+                'message': '',
+                'lastCallbackId': callback.message.message_id,
+            }, 'status = {}, lastCallbackId = {}, message = ""'.format(statusMap['done'], callback.message.message_id))
+            bot.edit_message_text(
+                text="--- {} ---\nNew record created successfully\nYou may /add again".format(pendulum.now(tz='Asia/Singapore').to_datetime_string()),
+                chat_id=callback.message.chat.id,
+                message_id=callback.message.message_id,
+            ) 
         return
 
     def awaitAmount(message):
@@ -436,5 +434,63 @@ def createBot():
             'lastCallbackId': d[message.chat.id]['lastCallbackId'],
         }, 'status = {}, message = "{}"'.format(statusMap['awaitConfirm'], messagePayload))
 
+    @bot.message_handler(commands=['due'])
+    def _due(message):
+        bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+        db.runSelect('users', column='id, username', condition=f'id = "{message.chat.id}"', showColumn=True)
+        d = DB._resultToJson(db.outputLast)
+        if message.chat.id in d:
+            bot.send_message(message.chat.id, 'Choose command', reply_markup=createMarkupDue())
+        else:
+            bot.send_message(message.chat.id, 'You have not joined expense-tracker, please /join first')
+        return
+    
+    def checkValidCallbackDue(callback):
+        return 'due.' in callback.data
+
+    @bot.callback_query_handler(func=checkValidCallbackDue) 
+    def _callbackDue(callback):
+        print('callbackO:', callback.data)
+        currentCommand = callback.data.split('.')[1]
+        if currentCommand == 'show':
+            # ..
+            # UPDATE records SET payor = 'She' WHERE num IN ('5','6');
+            # UPDATE records SET payor = 'He' WHERE num IN ('5','6');
+            # UPDATE records SET settled = 'Y' WHERE settled = 'N';
+            # UPDATE records SET settled = 'N' WHERE settled = 'Y';
+
+            # SELECT categories.category, amount, payor, ratio, comment, settled, timestamp FROM records LEFT JOIN categories ON records.category = categories.num WHERE records.id = "6122662956" AND records.settled = "N" ORDER BY timestamp ASC;
+            # SELECT categories.category, amount, payor, ratio, CAST(amount * (1-ratio) AS decimal(10, 2)) AS owe_payor, timestamp, comment FROM records LEFT JOIN categories ON records.category = categories.num WHERE records.id = "6122662956" AND records.settled = "N" ORDER BY timestamp ASC;
+            db.runSelect('records', column='categories.category, amount, payor, ratio, CAST(amount * (1-ratio) AS decimal(10, 2)) AS debt, timestamp, comment', joinType='LEFT JOIN', joinTable='categories', joinOn=('category', 'num'), \
+                showTable=True, condition=f'records.id = "{callback.message.chat.id}" AND records.settled = "N"', orderBy=('timestamp', 'payor'))
+            result = db.outputLast
+            if 'no output' in result:
+                bot.delete_message(chat_id=callback.message.chat.id, message_id=callback.message.message_id)
+                bot.send_message(callback.message.chat.id, 'No outstanding amount')
+            else:
+                image = drawTable(result, callback.message.chat.id)
+                bot.delete_message(chat_id=callback.message.chat.id, message_id=callback.message.message_id)
+                bot.send_photo(chat_id=callback.message.chat.id, photo=image)
+
+                # SELECT payor, CAST(SUM(amount * (1-ratio)) AS decimal(10, 2)) AS debt FROM records GROUP BY payor;
+                db.runSelect('records', column='payor, CAST(SUM(amount * (1-ratio)) AS decimal(10, 2)) AS debt', condition='settled = "N"', groupBy='payor', showColumn=True)
+                d = DB._resultToJson(db.outputLast)
+                message = '--- Summary ---\n' + '\n'.join(['{} paid ${}'.format(payor, d[payor]['debt']) for payor in d])
+                difference = None
+                if len(d) > 1:
+                    difference = eval('{} - {}'.format(d['He']['debt'], d['She']['debt']))
+                    if difference > 0:
+                        message += '\nShe → He : ${:.2f}'.format(difference)
+                    elif difference < 0:
+                        message += '\nHe → She : ${:.2f}'.format(-difference)
+                bot.send_message(callback.message.chat.id, message)
+        elif currentCommand == 'settle':
+            bot.delete_message(chat_id=callback.message.chat.id, message_id=callback.message.message_id)
+            db.runUpdate('records', {
+                'settled': 'Y',
+            }, 'settled = "N"')
+            bot.send_message(callback.message.chat.id, 'Cleared all outstanding')
+        return
+    
     return bot
           

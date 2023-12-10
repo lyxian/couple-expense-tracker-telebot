@@ -22,10 +22,15 @@ Requirements:
       - add user to DB << username\*, id\*
     - /add
       - add record to DB << id\*, date, category, amount, payor, ratio, comment
-    - /edit
     - /query
-      - output as table screenshot (matplotlib)
-    - /settle
+      - output as table screenshot (matplotlib/Pillow)
+    - /outstanding
+      - /show
+        - output as table screenshot
+        - summary
+      - /settle
+        - upd DB as settled
+    - /edit
 
 RDBMS:
 
@@ -44,6 +49,8 @@ Issues
 
 - is varchar(50) enough for messages.message?
   > use varchar(70)
+- include settledOn column
+- undo settled
 - .
 
 Done

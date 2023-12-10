@@ -116,14 +116,22 @@ def createMarkupRatio():
     return markup
 
 def createMarkupConfirm(data, mode=None):
-    markup = InlineKeyboardMarkup(row_width=4)
+    markup = InlineKeyboardMarkup(row_width=3)
     if mode == 'confirm':
-        arr = ['yes', 'no']
+        arr = ['yes']
     else:
         arr = []
     markup.add(
         *[InlineKeyboardButton(text=response, callback_data=f'{mode}:{response};{data}') for response in arr],
         InlineKeyboardButton(text='↶', callback_data=f'/undo: ;{data}'),
         InlineKeyboardButton(text='❌', callback_data=f'/cancel: ;{data}')
+    )
+    return markup
+
+def createMarkupDue():
+    markup = InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        InlineKeyboardButton(text='show', callback_data=f'due.show'),
+        InlineKeyboardButton(text='settle', callback_data=f'due.settle')
     )
     return markup

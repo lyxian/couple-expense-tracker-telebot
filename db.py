@@ -30,7 +30,7 @@ class DB:
         self.cmd = None
 
     def executeCommand(self):
-        # print(self.cmd)
+        print(self.cmd)
         p = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=self.env)
         self.output = p.stdout.read().decode().strip()
         self.logOutput()
@@ -40,7 +40,8 @@ class DB:
         self.cmd = self.connString + [cmd]
         self.executeCommand()
 
-    def runSelect(self, tableName, column=None, joinType=None, joinTable=None, joinOn=None, condition=None, count=None, showColumn=False, showTable=False):
+    def runSelect(self, tableName, column=None, joinType=None, joinTable=None, joinOn=None, condition=None, 
+                  orderBy=None, groupBy=None, count=None, showColumn=False, showTable=False):
         if showTable:
             connString = self.connString[:-1] + ['-te']
         else:
@@ -61,6 +62,19 @@ class DB:
                 cmd += f'WHERE {condition} '
             if count:
                 cmd += f'LIMIT {count} '
+            if orderBy:
+                if isinstance(orderBy, tuple):
+                    cmd += 'ORDER BY {} '.format(', '.join([f'{col} DESC' if col[0] == '-' else f'{col} ASC' for col in orderBy]))
+                else:
+                    if orderBy[0] == '-':
+                        cmd += f'ORDER BY {orderBy[1:]} DESC '
+                    else:
+                        cmd += f'ORDER BY {orderBy} ASC '
+            if groupBy:
+                if isinstance(groupBy, tuple):
+                    cmd += 'GROUP BY {} '.format(', '.join(groupBy))
+                else:
+                    cmd += f'GROUP BY {groupBy} '
         self.cmd = connString + [f'{cmd};']
         self.executeCommand()
 
@@ -87,10 +101,11 @@ class DB:
         self.cmd = self.connString + [cmd]
         self.executeCommand()
 
-    def runUpdate(self):
-        # UPDATE table_name
-        # SET column1 = value1, column2 = value2, ...
-        # WHERE condition;
+    def runUpdate(self, tableName, payload, condition):
+        # UPDATE table_name SET column1 = value1, column2 = value2, ... WHERE condition;
+        newPayload = ', '.join([f'{k} = "{v}"' for k,v in payload.items()])
+        cmd = f'UPDATE {tableName} SET {newPayload} WHERE {condition};'
+        self.cmd = self.connString + [cmd]
         self.executeCommand()
 
     def runDelete(self):
