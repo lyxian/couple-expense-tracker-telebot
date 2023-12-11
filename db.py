@@ -30,7 +30,7 @@ class DB:
         self.cmd = None
 
     def executeCommand(self):
-        print(self.cmd)
+        # print(self.cmd)
         p = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=self.env)
         self.output = p.stdout.read().decode().strip()
         self.logOutput()

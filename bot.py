@@ -473,7 +473,7 @@ def createBot():
                 bot.send_photo(chat_id=callback.message.chat.id, photo=image)
 
                 # SELECT payor, CAST(SUM(amount * (1-ratio)) AS decimal(10, 2)) AS debt FROM records GROUP BY payor;
-                db.runSelect('records', column='payor, CAST(SUM(amount * (1-ratio)) AS decimal(10, 2)) AS debt', condition='settled = "N"', groupBy='payor', showColumn=True)
+                db.runSelect('records', column='payor, CAST(SUM(amount * (1-ratio)) AS decimal(10, 2)) AS debt', condition=f'id = "{callback.message.chat.id}" AND settled = "N"', groupBy='payor', showColumn=True)
                 d = DB._resultToJson(db.outputLast)
                 message = '--- Summary ---\n' + '\n'.join(['{} paid ${}'.format(payor, d[payor]['debt']) for payor in d])
                 difference = None
@@ -488,7 +488,7 @@ def createBot():
             bot.delete_message(chat_id=callback.message.chat.id, message_id=callback.message.message_id)
             db.runUpdate('records', {
                 'settled': 'Y',
-            }, 'settled = "N"')
+            }, condition=f'id = "{callback.message.chat.id}" AND settled = "N"')
             bot.send_message(callback.message.chat.id, 'Cleared all outstanding')
         return
     
