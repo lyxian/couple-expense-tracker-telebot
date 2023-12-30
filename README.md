@@ -58,6 +58,8 @@ Done
 - add undo to return to previous status
 - add custom ratio functionality
 - upd undo to return to previous status
+- use photo with caption
+- upd cryptog utils
 - .
 
 ```

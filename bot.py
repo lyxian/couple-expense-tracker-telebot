@@ -469,9 +469,6 @@ def createBot():
                 bot.send_message(callback.message.chat.id, 'No outstanding amount')
             else:
                 image = drawTable(result, callback.message.chat.id)
-                bot.delete_message(chat_id=callback.message.chat.id, message_id=callback.message.message_id)
-                bot.send_photo(chat_id=callback.message.chat.id, photo=image)
-
                 # SELECT payor, CAST(SUM(amount * (1-ratio)) AS decimal(10, 2)) AS debt FROM records GROUP BY payor;
                 db.runSelect('records', column='payor, CAST(SUM(amount * (1-ratio)) AS decimal(10, 2)) AS debt', condition=f'id = "{callback.message.chat.id}" AND settled = "N"', groupBy='payor', showColumn=True)
                 d = DB._resultToJson(db.outputLast)
@@ -483,7 +480,9 @@ def createBot():
                         message += '\nShe → He : ${:.2f}'.format(difference)
                     elif difference < 0:
                         message += '\nHe → She : ${:.2f}'.format(-difference)
-                bot.send_message(callback.message.chat.id, message)
+                bot.delete_message(chat_id=callback.message.chat.id, message_id=callback.message.message_id)
+                # bot.send_photo(chat_id=callback.message.chat.id, photo=image)
+                bot.send_photo(chat_id=callback.message.chat.id, photo=image, caption=message)
         elif currentCommand == 'settle':
             bot.delete_message(chat_id=callback.message.chat.id, message_id=callback.message.message_id)
             db.runUpdate('records', {

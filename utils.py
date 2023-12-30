@@ -10,13 +10,22 @@ def getToken():
     encrypted = bytes(os.getenv('SECRET_TELEGRAM'), 'utf-8')
     return Fernet(key).decrypt(encrypted).decode()
 
-def encrypt(text):
-    key = bytes(os.getenv('KEY'), 'utf-8')
+def encrypt(text, key=None):
+    if key is None:
+        key = bytes(os.getenv('KEY'), 'utf-8')
+    else:
+        key = bytes(key, 'utf-8')
     return Fernet(key).encrypt(text.encode()).decode()
 
-def decrypt(value):
-    key = bytes(os.getenv('KEY'), 'utf-8')
-    encrypted = bytes(os.getenv(f'SECRET_{value.upper()}'), 'utf-8')
+def decrypt(value, key=None):
+    if key is None:
+        key = bytes(os.getenv('KEY'), 'utf-8')
+    else:
+        key = bytes(key, 'utf-8')
+    if os.getenv(f'SECRET_{value.upper()}'):
+        encrypted = bytes(os.getenv(f'SECRET_{value.upper()}'), 'utf-8')
+    else:
+        encrypted = bytes(value, 'utf-8')
     return Fernet(key).decrypt(encrypted).decode()
 
 def updateSecretsEnv():
@@ -51,8 +60,15 @@ if __name__ == '__main__':
     }
     mainParser.add_argument('--action', choices=choices, help='cryptography utility', **arg_template)
     mainParser.add_argument('--value', help='argument', **arg_template)
+    mainParser.add_argument('--key', help='argument', type=str)
     args = mainParser.parse_args()
     if args.action == 'encrypt':
-        print(encrypt(args.value))
+        if args.key:
+            print(encrypt(args.value, args.key))
+        else:
+            print(encrypt(args.value))
     elif args.action == 'decrypt':
-        print(decrypt(args.value))
+        if args.key:
+            print(decrypt(args.value, args.key))
+        else:
+            print(decrypt(args.value))
